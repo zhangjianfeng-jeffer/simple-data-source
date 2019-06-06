@@ -1,6 +1,5 @@
 package com.yolo.simple.ds.queue;
 
-import java.util.Date;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.locks.ReentrantLock;
@@ -77,7 +76,7 @@ public class WaitQueue {
 								arrayBlockingQueue.remove(wait);
 								flag=true;
 							}else{
-								long now=new Date().getTime();
+								long now=System.currentTimeMillis();
 								if(now-wait.getStartTime()>timeOut){
 									//等待超时
 									wait.setOk(true);
