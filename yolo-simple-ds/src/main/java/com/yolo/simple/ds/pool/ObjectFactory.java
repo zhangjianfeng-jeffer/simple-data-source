@@ -12,5 +12,18 @@ public abstract class ObjectFactory<T> implements IObjectFactory<T>{
 		this.createObj(objectValue);
 		return objectValue;
 	}
+	
+	public boolean validate(IObjectValue<T> t)throws Exception{
+		boolean validate = false;
+		if(t != null){
+			long lastReturnTime = t.getLastReturnTime();
+			long now = System.currentTimeMillis();
+			if(now - lastReturnTime < 1000*60*60*2){
+				validate = true;
+			}
+		}
+		return validate;
+	}
+	
 	public abstract void createObj(IObjectValue<T> objectValue)throws Exception;
 }

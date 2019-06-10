@@ -1,7 +1,7 @@
 package com.yolo.simple.ds.queue;
 
-import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.locks.ReentrantLock;
 
 import org.slf4j.Logger;
@@ -12,8 +12,8 @@ public class WaitQueue {
 	 * 日志工具
 	 */
 	private static Logger logger = LoggerFactory.getLogger(WaitQueue.class);
-	
-	private BlockingQueue<WaitObject> arrayBlockingQueue;
+	private long lastOfferTime;
+	private BlockingQueue<WaitObject> blockingQueue;
 	private int queueSize=50;
 	private long timeOut=1000;
 	
@@ -21,19 +21,28 @@ public class WaitQueue {
 	private boolean isDoing=false;
 	private ReentrantLock isDoingLock=new ReentrantLock(); 
 	public WaitQueue(){
-		this.arrayBlockingQueue=new ArrayBlockingQueue<WaitObject>(this.queueSize,true);
+		this.blockingQueue=new LinkedBlockingQueue<WaitObject>(this.queueSize);
 	}
 	public WaitQueue(int queueSize,long timeOut){
 		this.queueSize=queueSize;
 		this.timeOut=timeOut;
-		this.arrayBlockingQueue=new ArrayBlockingQueue<WaitObject>(this.queueSize,true);
+		this.blockingQueue=new LinkedBlockingQueue<WaitObject>(this.queueSize);
 	}
 	
-	public BlockingQueue<WaitObject> getArrayBlockingQueue() {
-		return arrayBlockingQueue;
+	public BlockingQueue<WaitObject> getBlockingQueue() {
+		return blockingQueue;
 	}
 	public long getTimeOut() {
 		return timeOut;
+	}
+	
+	public long getLastOfferTime(){
+		return this.lastOfferTime;
+	}
+	
+	public boolean offer(WaitObject waitObject){
+		this.lastOfferTime = System.currentTimeMillis();
+		return blockingQueue.offer(waitObject);
 	}
 	
 	
@@ -65,22 +74,22 @@ public class WaitQueue {
 	 */
 	private boolean doing(){
 		boolean flag=false;
-		if(arrayBlockingQueue.size()>0){
-			WaitObject wait=arrayBlockingQueue.peek();
+		if(blockingQueue.size()>0){
+			WaitObject wait=blockingQueue.peek();
 			if(wait!=null){
 				if(wait.isState()==true){
 					if(wait.isOccupied()==false){
 						synchronized (wait) {
 							if(wait.isOk()==true){
 								//已经成功获取连接
-								arrayBlockingQueue.remove(wait);
+								blockingQueue.remove(wait);
 								flag=true;
 							}else{
 								long now=System.currentTimeMillis();
 								if(now-wait.getStartTime()>timeOut){
 									//等待超时
 									wait.setOk(true);
-									arrayBlockingQueue.remove(wait);
+									blockingQueue.remove(wait);
 									flag=true;
 									logger.error("连接超时！");
 								}
@@ -92,7 +101,7 @@ public class WaitQueue {
 					}
 				}else{
 					wait.setOk(true);
-					arrayBlockingQueue.remove(wait);
+					blockingQueue.remove(wait);
 					flag=true;
 				}
 			}
@@ -102,6 +111,14 @@ public class WaitQueue {
 	}
 	
 	public int getSize(){
-		return arrayBlockingQueue.size();
+		return blockingQueue.size();
+	}
+	public Long getMaxWaitTime(){
+		Long maxWaitTime = null;
+		WaitObject wait=blockingQueue.peek();
+		if(wait!=null){
+			maxWaitTime = wait.getStartTime();
+		}
+		return maxWaitTime;
 	}
 }

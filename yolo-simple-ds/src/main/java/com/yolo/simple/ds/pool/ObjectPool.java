@@ -23,14 +23,14 @@ public class ObjectPool<T> implements IObjectPool<T>{
 	private static final Logger logger = LoggerFactory.getLogger(ObjectPool.class);
 	
 	private final String name;
-	
 	private final IObjectContainer<IObjectValue<T>> objectContainer = new ObjectContainer<IObjectValue<T>>();
-	
 	private final IObjectFactory<T> objectFactory;
+	
+	private final PoolProperties poolProperties;
 	/**
 	 *等待队列
 	 */
-	private WaitQueue waitQueue = new WaitQueue();
+	private final WaitQueue waitQueue;
 	
 	private Map<String,ICall> callMap;
 	private ICall call;
@@ -40,43 +40,59 @@ public class ObjectPool<T> implements IObjectPool<T>{
 	private IProess removeBadProess;
 	private IProess cleanFreeProess;
 	
-	public ObjectPool(String name,IProess proess,IObjectFactory<T> objectFactory){
-		this(name,proess,proess,proess,proess,objectFactory);
+	private long checkFreeTime;
+	
+	public ObjectPool(String name,IProess proess,IObjectFactory<T> objectFactory,PoolProperties poolProperties)throws Exception{
+		this(name,proess,proess,proess,proess,objectFactory,poolProperties);
 	}
-	public ObjectPool(String name,IProess waitQueueProess,IProess createObjProess,IProess removeBadProess,IProess cleanFreeProess,IObjectFactory<T> objectFactory){
+	public ObjectPool(String name,IProess waitQueueProess,IProess createObjProess,IProess removeBadProess,IProess cleanFreeProess,IObjectFactory<T> objectFactory,PoolProperties poolProperties)throws Exception{
 		this.name = name+"_"+String.valueOf(UUID.randomUUID().getMostSignificantBits());
 		this.objectFactory = objectFactory;
+		this.poolProperties = poolProperties;
 		this.waitQueueProess = waitQueueProess;
 		this.createObjProess = createObjProess;
 		this.removeBadProess = removeBadProess;
 		this.cleanFreeProess = cleanFreeProess;
+		this.waitQueue = new WaitQueue(this.poolProperties.getMaxWaitQueueSize(),this.poolProperties.getWaitTimeOut());
 		this.init();
 	}
 	
-	private void init(){
+	private void init()throws Exception{
 		this.callMap = new HashMap<String, ICall>();
 		this.callMap.put(ObjectPool.WAIT_QUEUE_TYPE, new ICall() {
 			public CallResult call(String callType) {
-				// TODO Auto-generated method stub
-				return null;
+				CallResult callResult = new CallResult();
+				boolean flag = waitQueue.proess();
+				callResult.setResult(true);
+				callResult.setKeep(!flag);
+				return callResult;
 			}
 		});
 		this.callMap.put(ObjectPool.CREATE_OBJ_TYPE, new ICall() {
 			public CallResult call(String callType) {
-				// TODO Auto-generated method stub
-				return null;
+				CallResult callResult = new CallResult();
+				createObj();
+				callResult.setResult(true);
+				callResult.setKeep(false);
+				return callResult;
 			}
 		});
 		this.callMap.put(ObjectPool.REMOVE_BAD_TYPE, new ICall() {
 			public CallResult call(String callType) {
-				// TODO Auto-generated method stub
-				return null;
+				CallResult callResult = new CallResult();
+				removeBad();
+				callResult.setResult(true);
+				callResult.setKeep(false);
+				return callResult;
 			}
 		});
 		this.callMap.put(ObjectPool.CLEAN_FREE_TYPE, new ICall() {
 			public CallResult call(String callType) {
-				// TODO Auto-generated method stub
-				return null;
+				CallResult callResult = new CallResult();
+				cleanFree();
+				callResult.setResult(true);
+				callResult.setKeep(false);
+				return callResult;
 			}
 		});
 		
@@ -91,11 +107,14 @@ public class ObjectPool<T> implements IObjectPool<T>{
 				return callResult;
 			}
 		};
-		
-		this.waitQueueProess.addCall(this.name, this.call);
-		this.createObjProess.addCall(this.name, this.call);
-		this.removeBadProess.addCall(this.name, this.call);
-		this.cleanFreeProess.addCall(this.name, this.call);
+		boolean flag = true;
+		flag = flag & this.waitQueueProess.addCall(this.name, this.call);
+		flag = flag & this.createObjProess.addCall(this.name, this.call);
+		flag = flag & this.removeBadProess.addCall(this.name, this.call);
+		flag = flag & this.cleanFreeProess.addCall(this.name, this.call);
+		if(flag == false){
+			throw new Exception("ObjectPool init error");
+		}
 	}
 	
 	
@@ -128,7 +147,7 @@ public class ObjectPool<T> implements IObjectPool<T>{
 		
 		boolean flag=false;
 		try {
-			flag=waitQueue.getArrayBlockingQueue().offer(waitObject);
+			flag=waitQueue.offer(waitObject);
 		} catch (Exception e) {
 			logger.error("waitQueue  offer waitObject failed "+waitObject);
 		}
@@ -203,17 +222,128 @@ public class ObjectPool<T> implements IObjectPool<T>{
 	}
 	
 	private boolean isFull(){
-		return false;
+		boolean isFull = false;
+		int maxSize = this.poolProperties.getMaxSize();
+		if(this.objectContainer.size()>=maxSize){
+			isFull = true;
+		}
+		
+		return isFull;
 	}
 	
 	private boolean isLess(){
-		return false;
+		boolean isLess = false;
+		int coreSize = this.poolProperties.getCoreSize();
+		if(this.objectContainer.size()<coreSize){
+			isLess = true;
+		}
+		return isLess;
 	}
 	
+	
 	private boolean isTimeToCheckFree(){
-		return true;
+		boolean isTimeToCheckFree = false;
+		long now = System.currentTimeMillis();
+		if(now - this.checkFreeTime > this.poolProperties.getCheckFreeMinTime()){
+			this.checkFreeTime = now;
+			isTimeToCheckFree = true;
+		}
+		return isTimeToCheckFree;
 	}
 	public boolean returnObject(IObjectValue<T> t) {
 		return objectContainer.release(t);
 	}
+	
+	
+	private synchronized void createObj(){
+		boolean flag = false;
+		if(this.isLess()){
+			flag = true;
+		}else if(!this.isFull()){
+			int size = this.waitQueue.getSize();
+			if(size>0){
+				if(size>((int)(0.1*this.poolProperties.getMaxWaitQueueSize())+1)){
+					flag = true;
+				}else{
+					Long maxWait = this.waitQueue.getMaxWaitTime();
+					if(maxWait != null){
+						long now = System.currentTimeMillis();
+						if(now - maxWait > 100){
+							flag = true;
+						}
+					}
+				}
+			}
+		}
+		if(flag == true){
+			try {
+				IObjectValue<T> obj = this.objectFactory.create(this);
+				if(obj != null){
+					this.objectContainer.add(obj);
+				}
+				
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+		
+		if(this.isLess()){
+			this.createObjProess.send(this.name, ObjectPool.CREATE_OBJ_TYPE);
+		}
+	}
+	
+	private synchronized void removeBad(){
+		if(this.objectContainer.badSize()>0){
+			while(true){
+				IObjectValue<T> obj = this.objectContainer.useBad();
+				if(obj != null){
+					boolean removeFlag = this.objectContainer.remove(obj);
+					if(removeFlag){
+						try {
+							this.objectFactory.destroy(obj);
+						} catch (Exception e) {
+							e.printStackTrace();
+						}
+					}
+				}else{
+					break;
+				}
+			}
+		}
+		if(this.objectContainer.badSize()>0){
+			this.removeBadProess.send(this.name, ObjectPool.REMOVE_BAD_TYPE);
+		}
+	}
+	
+	private synchronized void cleanFree(){
+		int size = this.waitQueue.getSize();
+		if(this.isLess()==false && size <= 0 ){
+			int times = (int)(this.objectContainer.size()*0.05);
+			long now = System.currentTimeMillis();
+			int count = 0;
+			while(true){
+				long lastOfferTime = this.waitQueue.getLastOfferTime();
+				if(now - lastOfferTime > 1000*60){
+					IObjectValue<T> obj = this.objectContainer.use();
+					if(obj!=null){
+						boolean removeFlag = this.objectContainer.remove(obj);
+						if(removeFlag){
+							try {
+								this.objectFactory.destroy(obj);
+							} catch (Exception e) {
+								e.printStackTrace();
+							}
+						}
+					}
+				}else{
+					break;
+				}
+				count ++;
+				if(count>=times){
+					break;
+				}
+			}
+		}
+	}
+	
 }
