@@ -268,7 +268,7 @@ public class ObjectPool<T> implements IObjectPool<T>{
 					Long maxWait = this.waitQueue.getMaxWaitTime();
 					if(maxWait != null){
 						long now = System.currentTimeMillis();
-						if(now - maxWait > 100){
+						if(now - maxWait > 20){
 							flag = true;
 						}
 					}
