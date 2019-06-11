@@ -18,7 +18,7 @@ public abstract class ObjectFactory<T> implements IObjectFactory<T>{
 		if(t != null){
 			long lastReturnTime = t.getLastReturnTime();
 			long now = System.currentTimeMillis();
-			if(now - lastReturnTime < 1000*60*60*2){
+			if(now - lastReturnTime < 1000*60*60*2  || lastReturnTime<=0){
 				validate = true;
 			}
 		}

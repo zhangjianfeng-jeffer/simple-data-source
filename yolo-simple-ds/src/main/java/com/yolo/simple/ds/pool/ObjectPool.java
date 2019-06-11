@@ -42,6 +42,8 @@ public class ObjectPool<T> implements IObjectPool<T>{
 	
 	private long checkFreeTime;
 	
+	private volatile boolean onOff = true;
+	
 	public ObjectPool(String name,IProess proess,IObjectFactory<T> objectFactory,PoolProperties poolProperties)throws Exception{
 		this(name,proess,proess,proess,proess,objectFactory,poolProperties);
 	}
@@ -63,8 +65,10 @@ public class ObjectPool<T> implements IObjectPool<T>{
 			public CallResult call(String callType) {
 				CallResult callResult = new CallResult();
 				boolean flag = waitQueue.proess();
-				callResult.setResult(true);
-				callResult.setKeep(!flag);
+				callResult.setResult(flag);
+				if(waitQueue.getSize()>0){
+					callResult.setKeep(true);
+				}
 				return callResult;
 			}
 		});
@@ -107,14 +111,10 @@ public class ObjectPool<T> implements IObjectPool<T>{
 				return callResult;
 			}
 		};
-		boolean flag = true;
-		flag = flag & this.waitQueueProess.addCall(this.name, this.call);
-		flag = flag & this.createObjProess.addCall(this.name, this.call);
-		flag = flag & this.removeBadProess.addCall(this.name, this.call);
-		flag = flag & this.cleanFreeProess.addCall(this.name, this.call);
-		if(flag == false){
-			throw new Exception("ObjectPool init error");
-		}
+		this.waitQueueProess.addCall(this.name, this.call);
+		this.createObjProess.addCall(this.name, this.call);
+		this.removeBadProess.addCall(this.name, this.call);
+		this.cleanFreeProess.addCall(this.name, this.call);
 	}
 	
 	
@@ -124,6 +124,7 @@ public class ObjectPool<T> implements IObjectPool<T>{
 		if(result == null){
 			throw new Exception("object get null");
 		}
+		System.out.println("totalsize:"+objectContainer.size()+",usedSize:"+objectContainer.uesdSize()+",freesize:"+objectContainer.freeSize()+",freeBadsize:"+objectContainer.badSize());
 		return result.getObject();
 	}
 	
@@ -180,6 +181,9 @@ public class ObjectPool<T> implements IObjectPool<T>{
 	}
 	
 	private IObjectValue<T> getObjectProess(){
+		if(!this.onOff){
+			return null;
+		}
 		IObjectValue<T> obj = this.objectContainer.use();
 		boolean createFlag = false;
 		if(obj!=null){
@@ -227,7 +231,6 @@ public class ObjectPool<T> implements IObjectPool<T>{
 		if(this.objectContainer.size()>=maxSize){
 			isFull = true;
 		}
-		
 		return isFull;
 	}
 	
@@ -256,6 +259,9 @@ public class ObjectPool<T> implements IObjectPool<T>{
 	
 	
 	private synchronized void createObj(){
+		if(!this.onOff){
+			return;
+		}
 		boolean flag = false;
 		if(this.isLess()){
 			flag = true;
@@ -279,7 +285,10 @@ public class ObjectPool<T> implements IObjectPool<T>{
 			try {
 				IObjectValue<T> obj = this.objectFactory.create(this);
 				if(obj != null){
-					this.objectContainer.add(obj);
+					boolean result = this.objectContainer.add(obj);
+					if(result == false){
+						this.objectFactory.destroy(obj);
+					}
 				}
 				
 			} catch (Exception e) {
@@ -293,18 +302,14 @@ public class ObjectPool<T> implements IObjectPool<T>{
 	}
 	
 	private synchronized void removeBad(){
+		if(!this.onOff){
+			return;
+		}
 		if(this.objectContainer.badSize()>0){
 			while(true){
 				IObjectValue<T> obj = this.objectContainer.useBad();
 				if(obj != null){
-					boolean removeFlag = this.objectContainer.remove(obj);
-					if(removeFlag){
-						try {
-							this.objectFactory.destroy(obj);
-						} catch (Exception e) {
-							e.printStackTrace();
-						}
-					}
+					this.removeObject(obj);
 				}else{
 					break;
 				}
@@ -316,6 +321,9 @@ public class ObjectPool<T> implements IObjectPool<T>{
 	}
 	
 	private synchronized void cleanFree(){
+		if(!this.onOff){
+			return;
+		}
 		int size = this.waitQueue.getSize();
 		if(this.isLess()==false && size <= 0 ){
 			int times = (int)(this.objectContainer.size()*0.05);
@@ -325,16 +333,7 @@ public class ObjectPool<T> implements IObjectPool<T>{
 				long lastOfferTime = this.waitQueue.getLastOfferTime();
 				if(now - lastOfferTime > 1000*60){
 					IObjectValue<T> obj = this.objectContainer.use();
-					if(obj!=null){
-						boolean removeFlag = this.objectContainer.remove(obj);
-						if(removeFlag){
-							try {
-								this.objectFactory.destroy(obj);
-							} catch (Exception e) {
-								e.printStackTrace();
-							}
-						}
-					}
+					this.removeObject(obj);
 				}else{
 					break;
 				}
@@ -342,6 +341,39 @@ public class ObjectPool<T> implements IObjectPool<T>{
 				if(count>=times){
 					break;
 				}
+			}
+		}
+	}
+	
+	private void removeObject(IObjectValue<T> obj){
+		if(obj!=null){
+			boolean removeFlag = this.objectContainer.remove(obj);
+			if(removeFlag){
+				try {
+					this.objectFactory.destroy(obj);
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+			}
+		}
+	}
+	
+	protected void finalize() throws Throwable {
+	    closeAll();
+	    super.finalize();
+	}
+	
+	private void closeAll(){
+		this.onOff = false;
+		IObjectValue<T> obj = null;
+		while(true){
+			obj = objectContainer.use();
+			this.removeObject(obj);
+			obj = objectContainer.useBad();
+			this.removeObject(obj);
+			
+			if(objectContainer.size()<=0){
+				break;
 			}
 		}
 	}

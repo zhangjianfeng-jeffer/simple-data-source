@@ -45,7 +45,7 @@ public class ObjectContainer<T extends IObjectValue<?>> implements IObjectContai
 			try {
 				this.resourcesLock.lock();
 				if(!freeList.isEmpty()){
-					t = freeList.getFirst();
+					t = freeList.pollFirst();
 					usedList.addLast(t);
 					t.use();
 				}
@@ -101,7 +101,7 @@ public class ObjectContainer<T extends IObjectValue<?>> implements IObjectContai
 			try {
 				this.resourcesLock.lock();
 				if(!freeBadList.isEmpty()){
-					t = freeBadList.getFirst();
+					t = freeBadList.pollFirst();
 					usedList.addLast(t);
 					t.use();
 				}
@@ -110,5 +110,20 @@ public class ObjectContainer<T extends IObjectValue<?>> implements IObjectContai
 			}
 		}
 		return t;
+	}
+
+	public int freeSize() {
+		int size;
+		try {
+			this.resourcesLock.lock();
+			size = freeList.size()+freeBadList.size();
+		}finally{
+			this.resourcesLock.unlock();
+		}
+		return size;
+	}
+
+	public int uesdSize() {
+		return usedList.size();
 	}
 }

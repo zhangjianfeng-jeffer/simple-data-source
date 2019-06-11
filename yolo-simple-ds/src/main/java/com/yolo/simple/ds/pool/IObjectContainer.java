@@ -12,7 +12,8 @@ public interface IObjectContainer<T> {
 	public boolean release(T t);
 
 	public int size();
-	
+	public int uesdSize();
+	public int freeSize();
 	
 	public int badSize();
 	public T useBad();
