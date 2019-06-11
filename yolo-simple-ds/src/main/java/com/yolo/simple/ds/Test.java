@@ -3,9 +3,12 @@ package com.yolo.simple.ds;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 import javax.sql.DataSource;
 
@@ -19,13 +22,22 @@ import com.yolo.simple.ds.pool.PoolProperties;
 import com.yolo.simple.ds.proess.Proess;
 
 public class Test {
+	public static long totalSize = 4000;
 	public static long count;
+	
+	private static ThreadPoolExecutor executor = null;
+	static{
+		BlockingQueue<Runnable> queue = new ArrayBlockingQueue<Runnable>(200);
+		int size = 60;
+    	executor = new ThreadPoolExecutor(size,size, 3,  TimeUnit.SECONDS, queue);
+	}
+	
 	public static void add(){
 		synchronized (Test.class) {
 			count++;
 		}
 		System.out.println("count=========="+count);
-		if(count>=4000){
+		if(count>=totalSize){
 			System.out.println("total time :"+(System.currentTimeMillis()-start));
 		}
 	}
@@ -37,40 +49,50 @@ public class Test {
 		properties.put("username", "root");
 		properties.put("password", "root");
 		properties.put("coreSize", "2");
-		properties.put("maxSize", "10");
+		properties.put("maxSize", "50");
 		properties.put("maxWaitQueueSize", "100");
 		properties.put("waitTimeOut", "1000");
 		properties.put("checkFreeMinTime", "100000");
 		final DataSource dataSource = new DataSourceDefault("mysql_db_01",properties);
 		
-		Runnable run = new Runnable() {
+		
+		Test.start = System.currentTimeMillis();
+		for (int i = 0; i < totalSize ; i++) {
+			Test.sub(dataSource);
+		}
+	}
+	
+	
+	
+	
+	private static void sub(final DataSource dataSource){
+    	while (true) {
+        	int max = executor.getMaximumPoolSize();
+            int currPoolSize = executor.getPoolSize();
+            int capacity = executor.getQueue().remainingCapacity();
+            if(capacity==0 && currPoolSize==max){
+            	try{
+            		Thread.sleep(10);
+            	}catch(Exception e){
+            		e.printStackTrace();
+            	}
+            }else{
+            	break;
+            }
+        }
+    	Runnable run = new Runnable() {
 			public void run() {
-				// TODO Auto-generated method stub
 				try {
-					Test.test2(dataSource);
+					Test.test1(dataSource);
 				} catch (Exception e) {
 					e.printStackTrace();
 				}
 			}
 		};
-		Test.start = System.currentTimeMillis();
-		for (int i = 0; i < 30; i++) {
-			Thread t = new Thread(run);
-			t.start();
-		}
-		
+    	executor.submit(run);
 	}
-	private static void test2(DataSource dataSource)throws Exception{
-		for (int i = 0; i < 200; i++) {
-			try {
-				Test.test1(dataSource,i);
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
-			//Thread.sleep(1000);
-		}
-	}
-	private static void test1(DataSource dataSource,int index)throws Exception{
+
+	private static void test1(DataSource dataSource)throws Exception{
 		Connection conn = dataSource.getConnection();
 		if(conn == null){
 			return;
@@ -97,7 +119,7 @@ public class Test {
 	}
 	
 	
-	private void test()throws Exception{
+	public void test()throws Exception{
 		final Proess proess = new Proess("test", 5);
 		final PoolProperties poolProperties = new PoolProperties();
 		
