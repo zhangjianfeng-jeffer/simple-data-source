@@ -3,6 +3,7 @@ package com.yolo.simple.ds;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -22,13 +23,13 @@ import com.yolo.simple.ds.pool.PoolProperties;
 import com.yolo.simple.ds.proess.Proess;
 
 public class Test {
-	public static long totalSize = 4000;
+	public static long totalSize = 10000;
 	public static long count;
 	
 	private static ThreadPoolExecutor executor = null;
 	static{
 		BlockingQueue<Runnable> queue = new ArrayBlockingQueue<Runnable>(200);
-		int size = 60;
+		int size = 20;
     	executor = new ThreadPoolExecutor(size,size, 3,  TimeUnit.SECONDS, queue);
 	}
 	
@@ -45,16 +46,20 @@ public class Test {
 	public static void main(String[] args)throws Exception {
 		Properties properties = new Properties();
 		properties.put("driver", "com.mysql.jdbc.Driver");
-		properties.put("url", "jdbc:mysql://localhost:3306/yolo?useSSL=false");
+		properties.put("url", "jdbc:mysql://10.0.31.40:3306/yolo?useSSL=false");
 		properties.put("username", "root");
 		properties.put("password", "root");
-		properties.put("coreSize", "2");
-		properties.put("maxSize", "50");
-		properties.put("maxWaitQueueSize", "100");
-		properties.put("waitTimeOut", "1000");
+		properties.put("coreSize", "10");
+		properties.put("maxSize", "19");
+		properties.put("maxWaitQueueSize", "200");
+		properties.put("waitTimeOut", "10000");
 		properties.put("checkFreeMinTime", "100000");
 		final DataSource dataSource = new DataSourceDefault("mysql_db_01",properties);
-		
+		Connection conn =dataSource.getConnection();
+		if(conn != null){
+			conn.close();
+		}
+		Thread.sleep(1000);
 		
 		Test.start = System.currentTimeMillis();
 		for (int i = 0; i < totalSize ; i++) {
@@ -83,16 +88,18 @@ public class Test {
     	Runnable run = new Runnable() {
 			public void run() {
 				try {
-					Test.test1(dataSource);
+					Test.testquery(dataSource);
 				} catch (Exception e) {
 					e.printStackTrace();
+				}finally{
+					Test.add();
 				}
 			}
 		};
     	executor.submit(run);
 	}
 
-	private static void test1(DataSource dataSource)throws Exception{
+	public static void test1(DataSource dataSource)throws Exception{
 		Connection conn = dataSource.getConnection();
 		if(conn == null){
 			return;
@@ -115,7 +122,38 @@ public class Test {
 				conn.close();
 			}
 		}
-		Test.add();
+	}
+	
+	public static void testquery(DataSource dataSource)throws Exception{
+		Connection conn = dataSource.getConnection();
+		if(conn == null){
+			return;
+		}
+		StringBuffer strB = new StringBuffer();
+		try {
+			long time = System.currentTimeMillis();
+			conn.setAutoCommit(false);
+			String sql = "SELECT * FROM activity_content order by ID limit "+(int)(Math.random()*100000)+",1 ";
+			PreparedStatement pstmt=conn.prepareStatement(sql);
+			ResultSet rs=pstmt.executeQuery();
+			
+			while(rs.next()){
+				for (int i = 1; i < 5; i++) {
+					strB.append(rs.getObject(i)+",");
+				}
+				strB.append("\r\n");
+			}
+			conn.commit();
+			pstmt.close();
+			System.out.println("time===="+(System.currentTimeMillis()-time));
+		} catch (Exception e) {
+			e.printStackTrace();
+		}finally{
+			if(conn!=null){
+				conn.close();
+			}
+		}
+		System.out.println(strB.toString());
 	}
 	
 	

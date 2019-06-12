@@ -7,49 +7,18 @@ package com.yolo.simple.ds.queue;
  * @author zhangjianfeng
  *
  */
-public class WaitObject {
+public class WaitObject<T> {
 	
 	/**
 	 * 开始时间
 	 */
 	private long startTime;
-
-	
-	/**
-	 * 是否等待完成
-	 */
-	private volatile boolean isOk;
-	
-	
-	/**
-	 * 是否占用中
-	 */
-	private volatile boolean isOccupied;
-	
-	
-	/**
-	 * 状态
-	 */
-	private volatile boolean state;
 	
 	
 	
-	public boolean isState() {
-		return state;
-	}
-
-	public void setState(boolean state) {
-		this.state = state;
-	}
-
-	public boolean isOccupied() {
-		return isOccupied;
-	}
-
-	public void setOccupied(boolean isOccupied) {
-		this.isOccupied = isOccupied;
-	}
-
+	private T t;
+	
+	
 	public long getStartTime() {
 		return startTime;
 	}
@@ -58,17 +27,11 @@ public class WaitObject {
 		this.startTime = startTime;
 	}
 
-	public boolean isOk() {
-		return isOk;
+	public T getT() {
+		return t;
 	}
 
-	public void setOk(boolean isOk) {
-		this.isOk = isOk;
-	}
-
-	@Override
-	public String toString() {
-		return "WaitObject [startTime=" + startTime + ", isOk=" + isOk
-				+ ", isOccupied=" + isOccupied + ", state=" + state + "]";
+	public void setT(T t) {
+		this.t = t;
 	}
 }

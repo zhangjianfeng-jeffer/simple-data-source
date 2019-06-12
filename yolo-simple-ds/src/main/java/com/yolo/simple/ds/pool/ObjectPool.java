@@ -30,7 +30,7 @@ public class ObjectPool<T> implements IObjectPool<T>{
 	/**
 	 *等待队列
 	 */
-	private final WaitQueue waitQueue;
+	private final WaitQueue<IObjectValue<T>> waitQueue;
 	
 	private Map<String,ICall> callMap;
 	private ICall call;
@@ -55,7 +55,12 @@ public class ObjectPool<T> implements IObjectPool<T>{
 		this.createObjProess = createObjProess;
 		this.removeBadProess = removeBadProess;
 		this.cleanFreeProess = cleanFreeProess;
-		this.waitQueue = new WaitQueue(this.poolProperties.getMaxWaitQueueSize(),this.poolProperties.getWaitTimeOut());
+		this.waitQueue = new WaitQueue<IObjectValue<T>>(this.poolProperties.getMaxWaitQueueSize(),this.poolProperties.getWaitTimeOut()) {
+			@Override
+			protected IObjectValue<T> tryGetSource() {
+				return getObjectProess();
+			}
+		};
 		this.init();
 	}
 	
@@ -124,7 +129,7 @@ public class ObjectPool<T> implements IObjectPool<T>{
 		if(result == null){
 			throw new Exception("object get null");
 		}
-		System.out.println("totalsize:"+objectContainer.size()+",usedSize:"+objectContainer.uesdSize()+",freesize:"+objectContainer.freeSize()+",freeBadsize:"+objectContainer.badSize());
+		System.out.println("totalsize:"+objectContainer.size()+",usedSize:"+objectContainer.uesdSize()+",freesize:"+objectContainer.freeSize()+",freeBadsize:"+objectContainer.badSize()+",waitsize:"+waitQueue.getSize());
 		return result.getObject();
 	}
 	
@@ -140,43 +145,21 @@ public class ObjectPool<T> implements IObjectPool<T>{
 		}
 		
 		//没有空闲的连接，将请求加入等待队列
-		WaitObject waitObject=new WaitObject();
+		WaitObject<IObjectValue<T>> waitObject=new WaitObject<IObjectValue<T>>();
 		waitObject.setStartTime(System.currentTimeMillis());
-		waitObject.setOk(false);
-		waitObject.setOccupied(true);
-		waitObject.setState(true);
-		
-		boolean flag=false;
-		try {
-			flag=waitQueue.offer(waitObject);
-		} catch (Exception e) {
-			logger.error("waitQueue  offer waitObject failed "+waitObject);
-		}
-		this.waitQueueProess.send(this.name, ObjectPool.WAIT_QUEUE_TYPE);
-		if(flag==false){
-			return result;
-		}
-		synchronized (waitObject) {	
-			do{
+		synchronized (waitObject) {
+			boolean flag=waitQueue.offer(waitObject);
+			this.waitQueueProess.send(this.name, ObjectPool.WAIT_QUEUE_TYPE);
+			if(flag){
 				try {
-					waitObject.setOccupied(false);
 					waitObject.wait();
 				} catch (InterruptedException e) {
-					logger.error("waitObject  wait error "+waitObject);
-					waitObject.setOk(true);
-					waitObject.setState(false);
-					break;
+					e.printStackTrace();
+					logger.error(e.getMessage());
 				}
-				//获取连接对象
-				result = this.getObjectProess();
-				waitObject.setOccupied(false);
-				if(result!=null){
-					waitObject.setOk(true);
-					break;
-				}
-				//获取成功或等待超时跳出
-			}while(waitObject.isOk()==false);
+			}
 		}
+		result = waitObject.getT();
 		return result;
 	}
 	
@@ -254,7 +237,11 @@ public class ObjectPool<T> implements IObjectPool<T>{
 		return isTimeToCheckFree;
 	}
 	public boolean returnObject(IObjectValue<T> t) {
-		return objectContainer.release(t);
+		boolean result = objectContainer.release(t);
+		if(this.waitQueue.getSize()>0){
+			this.waitQueue.flush();
+		}
+		return result;
 	}
 	
 	

@@ -7,13 +7,13 @@ import java.util.concurrent.locks.ReentrantLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class WaitQueue {
+public abstract class WaitQueue<T> {
 	/**
 	 * 日志工具
 	 */
 	private static Logger logger = LoggerFactory.getLogger(WaitQueue.class);
 	private long lastOfferTime;
-	private BlockingQueue<WaitObject> blockingQueue;
+	private BlockingQueue<WaitObject<T>> blockingQueue;
 	private int queueSize=50;
 	private long timeOut=1000;
 	
@@ -21,15 +21,16 @@ public class WaitQueue {
 	private boolean isDoing=false;
 	private ReentrantLock isDoingLock=new ReentrantLock(); 
 	public WaitQueue(){
-		this.blockingQueue=new LinkedBlockingQueue<WaitObject>(this.queueSize);
+		this.blockingQueue=new LinkedBlockingQueue<WaitObject<T>>(this.queueSize);
 	}
 	public WaitQueue(int queueSize,long timeOut){
 		this.queueSize=queueSize;
 		this.timeOut=timeOut;
-		this.blockingQueue=new LinkedBlockingQueue<WaitObject>(this.queueSize);
+		this.blockingQueue=new LinkedBlockingQueue<WaitObject<T>>(this.queueSize);
+		WaitQueue.logger.info("new WaitQueue");
 	}
 	
-	public BlockingQueue<WaitObject> getBlockingQueue() {
+	public BlockingQueue<WaitObject<T>> getBlockingQueue() {
 		return blockingQueue;
 	}
 	public long getTimeOut() {
@@ -40,13 +41,33 @@ public class WaitQueue {
 		return this.lastOfferTime;
 	}
 	
-	public boolean offer(WaitObject waitObject){
+	public boolean offer(WaitObject<T> waitObject){
 		this.lastOfferTime = System.currentTimeMillis();
 		return blockingQueue.offer(waitObject);
 	}
 	
 	
 	public boolean proess(){
+		Boolean isDo = null;
+		do{
+			isDo = this.tryProess();
+		}while(isDo==null || isDo == true);
+		return true;
+	}
+	
+	
+	public boolean flush(){
+		Boolean result = this.tryProess();
+		if(result == null){
+			return false;
+		}
+		return true;
+	}
+	
+	
+	
+	private Boolean tryProess(){
+		Boolean result = null;
 		isDoingLock.lock();
 		try{
 			if(isDoing==true){
@@ -56,66 +77,56 @@ public class WaitQueue {
 		}finally{
 			isDoingLock.unlock();
 		}
-		
-		boolean isDo=true;
-		do{
-			isDo=doing();
-		}while(isDo==true);
-		
-		isDoing=false;
-		
-		return true;
+		try{
+			result = this.tryProessSource();
+		}finally{
+			isDoing=false;
+		}
+		return result;
 	}
 	
 	
-	/**
-	 * 从队列中获取等待对象进行处理
-	 * @return
-	 */
-	private boolean doing(){
-		boolean flag=false;
+	
+	private boolean tryProessSource(){
+		boolean result = false;
 		if(blockingQueue.size()>0){
-			WaitObject wait=blockingQueue.peek();
+			WaitObject<T> wait=blockingQueue.peek();
 			if(wait!=null){
-				if(wait.isState()==true){
-					if(wait.isOccupied()==false){
-						synchronized (wait) {
-							if(wait.isOk()==true){
-								//已经成功获取连接
-								blockingQueue.remove(wait);
-								flag=true;
-							}else{
-								long now=System.currentTimeMillis();
-								if(now-wait.getStartTime()>timeOut){
-									//等待超时
-									wait.setOk(true);
-									blockingQueue.remove(wait);
-									flag=true;
-									logger.error("连接超时！");
-								}
-							}
-							wait.setOccupied(true);
-							//唤醒等待线程
-							wait.notifyAll();
+				boolean flag=false;
+				if(wait.getT()!=null){
+					flag = true;
+				}else{
+					T t = this.tryGetSource();
+					if(t != null){
+						wait.setT(t);
+						flag = true;
+					}else{
+						long now=System.currentTimeMillis();
+						if(now-wait.getStartTime()>timeOut){
+							flag = true;
 						}
 					}
-				}else{
-					wait.setOk(true);
+				}
+				if(flag == true){
+					synchronized (wait) {
+						wait.notifyAll();
+					}
 					blockingQueue.remove(wait);
-					flag=true;
+					result = true;
 				}
 			}
 		}
-		
-		return flag;
+		return result;
 	}
+	
+	protected abstract T tryGetSource();
 	
 	public int getSize(){
 		return blockingQueue.size();
 	}
 	public Long getMaxWaitTime(){
 		Long maxWaitTime = null;
-		WaitObject wait=blockingQueue.peek();
+		WaitObject<T> wait=blockingQueue.peek();
 		if(wait!=null){
 			maxWaitTime = wait.getStartTime();
 		}
