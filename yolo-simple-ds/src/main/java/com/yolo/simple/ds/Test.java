@@ -29,7 +29,7 @@ public class Test {
 	private static ThreadPoolExecutor executor = null;
 	static{
 		BlockingQueue<Runnable> queue = new ArrayBlockingQueue<Runnable>(200);
-		int size = 20;
+		int size = 50;
     	executor = new ThreadPoolExecutor(size,size, 3,  TimeUnit.SECONDS, queue);
 	}
 	
@@ -49,8 +49,8 @@ public class Test {
 		properties.put("url", "jdbc:mysql://10.0.31.40:3306/yolo?useSSL=false");
 		properties.put("username", "root");
 		properties.put("password", "root");
-		properties.put("coreSize", "10");
-		properties.put("maxSize", "19");
+		properties.put("coreSize", "20");
+		properties.put("maxSize", "30");
 		properties.put("maxWaitQueueSize", "200");
 		properties.put("waitTimeOut", "10000");
 		properties.put("checkFreeMinTime", "100000");
@@ -88,7 +88,7 @@ public class Test {
     	Runnable run = new Runnable() {
 			public void run() {
 				try {
-					Test.testquery(dataSource);
+					Test.test1(dataSource);
 				} catch (Exception e) {
 					e.printStackTrace();
 				}finally{

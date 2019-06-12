@@ -27,7 +27,7 @@ import com.yolo.simple.ds.proess.Proess;
 import com.yolo.simple.ds.util.StringUtils;
 
 public class DataSourceDefault implements DataSource{
-	private static Proess proessQueue = new Proess("DataSourceDefault_proessQueue", 1);
+	private static Proess proessQueue = new Proess("DataSourceDefault_proessQueue", 5);
 	private static Proess proessOther = new Proess("DataSourceDefault_proessOther", 50);
 	private static Monitor monitorOne = new Monitor("monitorOne",1000);
 	private static Monitor monitorDouble = new Monitor("monitorDouble",1000);
