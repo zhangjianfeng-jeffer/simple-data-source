@@ -127,9 +127,9 @@ public class ObjectPool<T> implements IObjectPool<T>{
 	public T getObject()throws Exception{
 		IObjectValue<T> result = this.getObjectCore();
 		if(result == null){
-			throw new Exception("object get null");
+			throw new Exception("timeout or wait queue is full ,get failed");
 		}
-		System.out.println("totalsize:"+objectContainer.size()+",usedSize:"+objectContainer.uesdSize()+",freesize:"+objectContainer.freeSize()+",freeBadsize:"+objectContainer.badSize()+",waitsize:"+waitQueue.getSize());
+		//System.out.println("totalsize:"+objectContainer.size()+",usedSize:"+objectContainer.uesdSize()+",freesize:"+objectContainer.freeSize()+",freeBadsize:"+objectContainer.badSize()+",waitsize:"+waitQueue.getSize());
 		return result.getObject();
 	}
 	
