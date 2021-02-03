@@ -9,7 +9,7 @@ import org.slf4j.LoggerFactory;
 
 import com.yolo.simple.ds.proess.CallResult;
 import com.yolo.simple.ds.proess.ICall;
-import com.yolo.simple.ds.proess.IProess;
+import com.yolo.simple.ds.proess.IProcess;
 import com.yolo.simple.ds.queue.WaitObject;
 import com.yolo.simple.ds.queue.WaitQueue;
 
@@ -35,30 +35,30 @@ public class ObjectPool<T> implements IObjectPool<T>{
 	private Map<String,ICall> callMap;
 	private ICall call;
 	
-	private IProess waitQueueProess;
-	private IProess createObjProess;
-	private IProess removeBadProess;
-	private IProess cleanFreeProess;
+	private IProcess waitQueueProcess;
+	private IProcess createObjProcess;
+	private IProcess removeBadProcess;
+	private IProcess cleanFreeProcess;
 	
 	private long checkFreeTime;
 	
 	private volatile boolean onOff = true;
 	
-	public ObjectPool(String name,IProess proess,IObjectFactory<T> objectFactory,PoolProperties poolProperties)throws Exception{
-		this(name,proess,proess,proess,proess,objectFactory,poolProperties);
+	public ObjectPool(String name, IProcess process, IObjectFactory<T> objectFactory, PoolProperties poolProperties)throws Exception{
+		this(name,process,process,process,process,objectFactory,poolProperties);
 	}
-	public ObjectPool(String name,IProess waitQueueProess,IProess createObjProess,IProess removeBadProess,IProess cleanFreeProess,IObjectFactory<T> objectFactory,PoolProperties poolProperties)throws Exception{
+	public ObjectPool(String name, IProcess waitQueueProcess, IProcess createObjProcess, IProcess removeBadProcess, IProcess cleanFreeProcess, IObjectFactory<T> objectFactory, PoolProperties poolProperties)throws Exception{
 		this.name = name+"_"+String.valueOf(UUID.randomUUID().getMostSignificantBits());
 		this.objectFactory = objectFactory;
 		this.poolProperties = poolProperties;
-		this.waitQueueProess = waitQueueProess;
-		this.createObjProess = createObjProess;
-		this.removeBadProess = removeBadProess;
-		this.cleanFreeProess = cleanFreeProess;
+		this.waitQueueProcess = waitQueueProcess;
+		this.createObjProcess = createObjProcess;
+		this.removeBadProcess = removeBadProcess;
+		this.cleanFreeProcess = cleanFreeProcess;
 		this.waitQueue = new WaitQueue<IObjectValue<T>>(this.poolProperties.getMaxWaitQueueSize(),this.poolProperties.getWaitTimeOut()) {
 			@Override
 			protected IObjectValue<T> tryGetSource() {
-				return getObjectProess();
+				return getObjectProcess();
 			}
 		};
 		this.init();
@@ -69,7 +69,7 @@ public class ObjectPool<T> implements IObjectPool<T>{
 		this.callMap.put(ObjectPool.WAIT_QUEUE_TYPE, new ICall() {
 			public CallResult call(String callType) {
 				CallResult callResult = new CallResult();
-				boolean flag = waitQueue.proess();
+				boolean flag = waitQueue.process();
 				callResult.setResult(flag);
 				if(waitQueue.getSize()>0){
 					callResult.setKeep(true);
@@ -116,20 +116,20 @@ public class ObjectPool<T> implements IObjectPool<T>{
 				return callResult;
 			}
 		};
-		this.waitQueueProess.addCall(this.name, this.call);
-		this.createObjProess.addCall(this.name, this.call);
-		this.removeBadProess.addCall(this.name, this.call);
-		this.cleanFreeProess.addCall(this.name, this.call);
+		this.waitQueueProcess.addCall(this.name, this.call);
+		this.createObjProcess.addCall(this.name, this.call);
+		this.removeBadProcess.addCall(this.name, this.call);
+		this.cleanFreeProcess.addCall(this.name, this.call);
 	}
 	
 	
 	
 	public T getObject()throws Exception{
 		IObjectValue<T> result = this.getObjectCore();
+		System.out.println("totalSize:"+objectContainer.size()+",usedSize:"+objectContainer.uesdSize()+",freeSize:"+objectContainer.freeSize()+",freeBadSize:"+objectContainer.badSize()+",waitSize:"+waitQueue.getSize());
 		if(result == null){
 			throw new Exception("timeout or wait queue is full ,get failed");
 		}
-		//System.out.println("totalsize:"+objectContainer.size()+",usedSize:"+objectContainer.uesdSize()+",freesize:"+objectContainer.freeSize()+",freeBadsize:"+objectContainer.badSize()+",waitsize:"+waitQueue.getSize());
 		return result.getObject();
 	}
 	
@@ -138,7 +138,7 @@ public class ObjectPool<T> implements IObjectPool<T>{
 		IObjectValue<T> result = null;
 		//等待队列为空时直接去获取连接对象返回
 		if(waitQueue.getSize()<=0){
-			result = this.getObjectProess();
+			result = this.getObjectProcess();
 			if(result!=null){
 				return result;
 			}
@@ -149,7 +149,7 @@ public class ObjectPool<T> implements IObjectPool<T>{
 		waitObject.setStartTime(System.currentTimeMillis());
 		synchronized (waitObject) {
 			boolean flag=waitQueue.offer(waitObject);
-			this.waitQueueProess.send(this.name, ObjectPool.WAIT_QUEUE_TYPE);
+			this.waitQueueProcess.send(this.name, ObjectPool.WAIT_QUEUE_TYPE);
 			if(flag){
 				try {
 					waitObject.wait();
@@ -163,7 +163,7 @@ public class ObjectPool<T> implements IObjectPool<T>{
 		return result;
 	}
 	
-	private IObjectValue<T> getObjectProess(){
+	private IObjectValue<T> getObjectProcess(){
 		if(!this.onOff){
 			return null;
 		}
@@ -175,7 +175,7 @@ public class ObjectPool<T> implements IObjectPool<T>{
 				obj.tagBad();
 				this.objectContainer.release(obj);
 				obj = null;
-				this.removeBadProess.send(this.name, ObjectPool.REMOVE_BAD_TYPE);
+				this.removeBadProcess.send(this.name, ObjectPool.REMOVE_BAD_TYPE);
 				createFlag = true;
 			}
 			if(createFlag == false){
@@ -189,10 +189,10 @@ public class ObjectPool<T> implements IObjectPool<T>{
 			}
 		}
 		if(createFlag){
-			this.createObjProess.send(this.name, ObjectPool.CREATE_OBJ_TYPE);
+			this.createObjProcess.send(this.name, ObjectPool.CREATE_OBJ_TYPE);
 		}
 		if(this.isTimeToCheckFree()){
-			this.cleanFreeProess.send(this.name, ObjectPool.CLEAN_FREE_TYPE);
+			this.cleanFreeProcess.send(this.name, ObjectPool.CLEAN_FREE_TYPE);
 		}
 		return obj;
 	}
@@ -284,7 +284,7 @@ public class ObjectPool<T> implements IObjectPool<T>{
 		}
 		
 		if(this.isLess()){
-			this.createObjProess.send(this.name, ObjectPool.CREATE_OBJ_TYPE);
+			this.createObjProcess.send(this.name, ObjectPool.CREATE_OBJ_TYPE);
 		}
 	}
 	
@@ -303,7 +303,7 @@ public class ObjectPool<T> implements IObjectPool<T>{
 			}
 		}
 		if(this.objectContainer.badSize()>0){
-			this.removeBadProess.send(this.name, ObjectPool.REMOVE_BAD_TYPE);
+			this.removeBadProcess.send(this.name, ObjectPool.REMOVE_BAD_TYPE);
 		}
 	}
 	

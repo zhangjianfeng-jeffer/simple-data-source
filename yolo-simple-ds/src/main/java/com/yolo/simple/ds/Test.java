@@ -20,10 +20,10 @@ import com.yolo.simple.ds.pool.ObjectConnectionProxy;
 import com.yolo.simple.ds.pool.ObjectFactory;
 import com.yolo.simple.ds.pool.ObjectPool;
 import com.yolo.simple.ds.pool.PoolProperties;
-import com.yolo.simple.ds.proess.Proess;
+import com.yolo.simple.ds.proess.Process;
 
 public class Test {
-	public static long totalSize = 10000;
+	public static long totalSize = 50000;
 	public static long count;
 	
 	private static ThreadPoolExecutor executor = null;
@@ -49,9 +49,9 @@ public class Test {
 		properties.put("url", "jdbc:mysql://10.0.31.40:3306/yolo?useSSL=false");
 		properties.put("username", "root");
 		properties.put("password", "root");
-		properties.put("coreSize", "20");
-		properties.put("maxSize", "30");
-		properties.put("maxWaitQueueSize", "200");
+		properties.put("coreSize", "10");
+		properties.put("maxSize", "25");
+		properties.put("maxWaitQueueSize", "100");
 		properties.put("waitTimeOut", "10000");
 		properties.put("checkFreeMinTime", "100000");
 		final DataSource dataSource = new DataSourceDefault("mysql_db_01",properties);
@@ -59,12 +59,18 @@ public class Test {
 		if(conn != null){
 			conn.close();
 		}
-		Thread.sleep(1000);
-		
+
 		Test.start = System.currentTimeMillis();
 		for (int i = 0; i < totalSize ; i++) {
 			Test.sub(dataSource);
 		}
+
+
+
+		Thread.sleep(5000);
+		Test.sub(dataSource);
+
+
 	}
 	
 	
@@ -77,7 +83,7 @@ public class Test {
             int capacity = executor.getQueue().remainingCapacity();
             if(capacity==0 && currPoolSize==max){
             	try{
-            		Thread.sleep(10);
+            		Thread.sleep(1);
             	}catch(Exception e){
             		e.printStackTrace();
             	}
@@ -88,7 +94,8 @@ public class Test {
     	Runnable run = new Runnable() {
 			public void run() {
 				try {
-					Test.test1(dataSource);
+					long time = System.currentTimeMillis();
+					Test.testquery(dataSource);
 				} catch (Exception e) {
 					e.printStackTrace();
 				}finally{
@@ -125,18 +132,21 @@ public class Test {
 	}
 	
 	public static void testquery(DataSource dataSource)throws Exception{
+		long time1 = System.currentTimeMillis();
 		Connection conn = dataSource.getConnection();
 		if(conn == null){
 			return;
 		}
+		long time2 = System.currentTimeMillis();
+		long time3 = 0;
+		long time4 = 0;
 		StringBuffer strB = new StringBuffer();
 		try {
-			long time = System.currentTimeMillis();
 			conn.setAutoCommit(false);
-			String sql = "SELECT * FROM activity_content order by ID limit "+(int)(Math.random()*100000)+",1 ";
+			String sql = "SELECT * FROM activity_content order by ID limit "+(int)(Math.random()*100)+",1 ";
 			PreparedStatement pstmt=conn.prepareStatement(sql);
 			ResultSet rs=pstmt.executeQuery();
-			
+			time3 = System.currentTimeMillis();
 			while(rs.next()){
 				for (int i = 1; i < 5; i++) {
 					strB.append(rs.getObject(i)+",");
@@ -145,7 +155,7 @@ public class Test {
 			}
 			conn.commit();
 			pstmt.close();
-			System.out.println("time===="+(System.currentTimeMillis()-time));
+			time4 = System.currentTimeMillis();
 		} catch (Exception e) {
 			e.printStackTrace();
 		}finally{
@@ -153,12 +163,14 @@ public class Test {
 				conn.close();
 			}
 		}
-		System.out.println(strB.toString());
+		long now = System.currentTimeMillis();
+		System.out.println("time--all-->:"+(now-time1)+",getConn-->:"+(time2-time1)+",sql-execute-->:"+(time4-time2)+",close-->:"+(now-time4));
+		//System.out.println(strB.toString());
 	}
 	
 	
 	public void test()throws Exception{
-		final Proess proess = new Proess("test", 5);
+		final Process proess = new Process("test", 5);
 		final PoolProperties poolProperties = new PoolProperties();
 		
 		IObjectFactory<Connection> objectFactory = new ObjectFactory<Connection>() {

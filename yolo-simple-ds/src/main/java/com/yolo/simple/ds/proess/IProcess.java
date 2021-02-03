@@ -1,6 +1,6 @@
 package com.yolo.simple.ds.proess;
 
-public interface IProess {
+public interface IProcess {
 
 	public boolean addCall(String name,ICall call);
 	

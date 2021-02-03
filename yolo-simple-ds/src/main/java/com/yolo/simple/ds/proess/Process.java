@@ -7,7 +7,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import com.yolo.simple.ds.util.StringUtils;
 
-public class Proess implements IMonitor,IProess{
+public class Process implements IMonitor, IProcess {
 	private String name;
 	private static final String separator="_";
 	private final Map<String,ICall> callMap=new ConcurrentHashMap<String,ICall>();
@@ -23,7 +23,7 @@ public class Proess implements IMonitor,IProess{
 	private RunningCheck runningCheck;
 	private ProcessThread processThread;
 	
-	public Proess(String name,long minWaitTime){
+	public Process(String name, long minWaitTime){
 		this.name = name;
 		this.minWaitTime = minWaitTime;
 		this.runningCheck = new RunningCheck(5*1000+this.minWaitTime*3);
