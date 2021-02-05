@@ -123,7 +123,7 @@ public class ObjectContainer<T extends IObjectValue<?>> implements IObjectContai
 		return size;
 	}
 
-	public int uesdSize() {
+	public int usedSize() {
 		return usedList.size();
 	}
 }

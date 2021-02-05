@@ -202,6 +202,7 @@ public class Process implements IMonitor, IProcess {
 					Thread.sleep(minWaitTime);
 				} catch (InterruptedException e) {
 					e.printStackTrace();
+					System.out.println("runningCheck------>:"+runningCheck);
 				}
 			}else{
 				Thread.yield();
@@ -246,7 +247,7 @@ public class Process implements IMonitor, IProcess {
 		
 		@Override
 		public String toString(){
-			return "callTime:"+callTime+",callFrontTime:"+callFrontTime+",runTime:"+runTime+",isRunning:"+isRunning();
+			return "now:"+System.currentTimeMillis()+",callTime:"+callTime+",callFrontTime:"+callFrontTime+",runTime:"+runTime+",isRunning:"+isRunning();
 		}
 	}
 	
@@ -255,7 +256,7 @@ public class Process implements IMonitor, IProcess {
 		return runningCheck.isRunning();
 	}
 	public boolean callReStart(){
-		System.out.print("reStart---name:"+name);
+		System.out.print("reStart---name:"+name+",isRunning-->:"+this.isRunning());
 		boolean flag=false;
 		if(processThread!=null){
 			flag=processThread.reStart();
@@ -271,4 +272,9 @@ public class Process implements IMonitor, IProcess {
 		return flag;
 	}
 
+
+	@Override
+	public String toString(){
+		return "Process--toString-->:runningCheck:"+runningCheck.toString();
+	}
 }

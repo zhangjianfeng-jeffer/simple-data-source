@@ -17,7 +17,7 @@ public class Monitor implements IMonitor{
 	private long sleepTime;
 	private long runTime;
 	private ProcessThread processThread;
-	private long forntTime=0;
+	private long frontTime =0;
 	
 	public Monitor(){
 		this("MonitorManager",1000);
@@ -31,7 +31,7 @@ public class Monitor implements IMonitor{
 		this.processThread=new ProcessThread(name+"MonitorManager",50) {
 			@Override
 			protected void runProcess() {
-				proess();
+				process();
 			}
 		};
 	}
@@ -40,7 +40,7 @@ public class Monitor implements IMonitor{
 		return monitorList.add(monitor);
 	}
 	
-	private void proess(){
+	private void process(){
 		try {
 			Thread.sleep(sleepTime);
 		} catch (InterruptedException e) {
@@ -49,8 +49,8 @@ public class Monitor implements IMonitor{
 		runTime=System.currentTimeMillis();
 		processP();
 		
-		if(runTime-forntTime> 1000*60){
-			forntTime=runTime;
+		if(runTime- frontTime > 1000*60){
+			frontTime =runTime;
 			logger.info(name+" have been alive!!!");
 		}
 	}
@@ -62,6 +62,7 @@ public class Monitor implements IMonitor{
 				flag=monitor.isRunning();
 				if(flag==false){
 					logger.error(monitor.toString()+" is run false!!!");
+					System.out.println(monitor.toString());
 					boolean result=monitor.callReStart();
 					if(result==true){
 						logger.info(monitor.toString()+" reStart success!!!");

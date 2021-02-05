@@ -45,8 +45,7 @@ public abstract class WaitQueue<T> {
 		this.lastOfferTime = System.currentTimeMillis();
 		return blockingQueue.offer(waitObject);
 	}
-	
-	
+
 	public boolean process(){
 		Boolean isDo = null;
 		do{
@@ -136,4 +135,5 @@ public abstract class WaitQueue<T> {
 		}
 		return maxWaitTime;
 	}
+
 }

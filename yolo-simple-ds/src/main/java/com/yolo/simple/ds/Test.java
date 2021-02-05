@@ -28,8 +28,8 @@ public class Test {
 	
 	private static ThreadPoolExecutor executor = null;
 	static{
-		BlockingQueue<Runnable> queue = new ArrayBlockingQueue<Runnable>(200);
-		int size = 50;
+		BlockingQueue<Runnable> queue = new ArrayBlockingQueue<Runnable>(100);
+		int size = 200;
     	executor = new ThreadPoolExecutor(size,size, 3,  TimeUnit.SECONDS, queue);
 	}
 	
@@ -51,7 +51,7 @@ public class Test {
 		properties.put("password", "root");
 		properties.put("coreSize", "10");
 		properties.put("maxSize", "25");
-		properties.put("maxWaitQueueSize", "100");
+		properties.put("maxWaitQueueSize", "800");
 		properties.put("waitTimeOut", "10000");
 		properties.put("checkFreeMinTime", "100000");
 		final DataSource dataSource = new DataSourceDefault("mysql_db_01",properties);
@@ -65,12 +65,22 @@ public class Test {
 			Test.sub(dataSource);
 		}
 
+		Thread.sleep(5000);
+		Test.start = System.currentTimeMillis();
+		for (int i = 0; i < totalSize ; i++) {
+			Test.sub(dataSource);
+		}
 
+		Thread.sleep(5000);
+		Test.start = System.currentTimeMillis();
+		for (int i = 0; i < totalSize ; i++) {
+			Test.sub(dataSource);
+		}
 
 		Thread.sleep(5000);
 		Test.sub(dataSource);
 
-
+		Thread.sleep(50000);
 	}
 	
 	
