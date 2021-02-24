@@ -53,7 +53,7 @@ public class Test {
 		properties.put("maxSize", "25");
 		properties.put("maxWaitQueueSize", "800");
 		properties.put("waitTimeOut", "10000");
-		properties.put("checkFreeMinTime", "100000");
+		properties.put("checkFreeMinTime", "30000");
 		final DataSource dataSource = new DataSourceDefault("mysql_db_01",properties);
 		Connection conn =dataSource.getConnection();
 		if(conn != null){

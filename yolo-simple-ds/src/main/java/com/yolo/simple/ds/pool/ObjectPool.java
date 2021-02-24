@@ -1,8 +1,6 @@
 package com.yolo.simple.ds.pool;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -244,7 +242,8 @@ public class ObjectPool<T> implements IObjectPool<T>{
 		return result;
 	}
 	
-	
+
+	private int lastQueueSize = 0;
 	private synchronized void createObj(){
 		if(!this.onOff){
 			return;
@@ -255,18 +254,16 @@ public class ObjectPool<T> implements IObjectPool<T>{
 		}else if(!this.isFull()){
 			int size = this.waitQueue.getSize();
 			if(size>0){
-				if(size>((int)(0.1*this.poolProperties.getMaxWaitQueueSize())+1)){
+				if(size>this.lastQueueSize){
 					flag = true;
 				}else{
-					Long maxWait = this.waitQueue.getMaxWaitTime();
-					if(maxWait != null){
-						long now = System.currentTimeMillis();
-						if(now - maxWait > 20){
-							flag = true;
-						}
+					int num = this.lastQueueSize - size;
+					if(num<size){
+						flag = true;
 					}
 				}
 			}
+			this.lastQueueSize = size;
 		}
 		if(flag == true){
 			try {
@@ -306,27 +303,33 @@ public class ObjectPool<T> implements IObjectPool<T>{
 			this.removeBadProcess.send(this.name, ObjectPool.REMOVE_BAD_TYPE);
 		}
 	}
-	
+
+
+	private FreeCheck freeCheck = new FreeCheck(10);
 	private synchronized void cleanFree(){
 		if(!this.onOff){
 			return;
 		}
+		freeCheck.logNum(this.objectContainer.usedSize());
 		int size = this.waitQueue.getSize();
 		if(this.isLess()==false && size <= 0 ){
-			int times = (int)(this.objectContainer.size()*0.05);
-			long now = System.currentTimeMillis();
-			int count = 0;
-			while(true){
-				long lastOfferTime = this.waitQueue.getLastOfferTime();
-				if(now - lastOfferTime > 1000*60){
-					IObjectValue<T> obj = this.objectContainer.use();
-					this.removeObject(obj);
-				}else{
-					break;
-				}
-				count ++;
-				if(count>=times){
-					break;
+			Integer maxNum = freeCheck.getMaxNum();
+			if(maxNum!=null && maxNum<this.objectContainer.size()-1){
+				int times = (this.objectContainer.size()-1 - maxNum)/2;
+				long now = System.currentTimeMillis();
+				int count = 0;
+				while(true){
+					if(count>=times){
+						break;
+					}
+					long lastOfferTime = this.waitQueue.getLastOfferTime();
+					if(now - lastOfferTime > 1000*60){
+						IObjectValue<T> obj = this.objectContainer.use();
+						this.removeObject(obj);
+					}else{
+						break;
+					}
+					count ++;
 				}
 			}
 		}
@@ -365,4 +368,37 @@ public class ObjectPool<T> implements IObjectPool<T>{
 		}
 	}
 	
+}
+
+
+class FreeCheck{
+	private int size;
+	private List<Integer> useNumList;
+
+	public FreeCheck(int size){
+		this.size = size;
+		this.useNumList = new ArrayList<Integer>();
+	}
+
+	public synchronized void logNum(int num){
+		useNumList.add(num);
+		if(useNumList.size()>this.size){
+			useNumList.remove(useNumList.size()-1);
+		}
+	}
+
+	public synchronized Integer getMaxNum(){
+		Integer num = null;
+		if(useNumList.size() >= this.size){
+			for (Integer numItem:useNumList) {
+				if(num == null || numItem>num){
+					num = numItem;
+				}
+			}
+		}
+		return num;
+	}
+
+
+
 }

@@ -19,7 +19,7 @@ public abstract class WaitQueue<T> {
 	
 	
 	private volatile boolean isDoing=false;
-	private ReentrantLock isDoingLock=new ReentrantLock(); 
+	private ReentrantLock isDoingLock=new ReentrantLock();
 	public WaitQueue(){
 		this.blockingQueue=new LinkedBlockingQueue<WaitObject<T>>(this.queueSize);
 	}
