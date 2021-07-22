@@ -316,7 +316,7 @@ public class ObjectPool<T> implements IObjectPool<T>{
 	}
 
 
-	private FreeCheck freeCheck = new FreeCheck(10,10);
+	private FreeCheck freeCheck = new FreeCheck(10,10*1000);
 	private synchronized void cleanFree(){
 		if(!this.onOff){
 			return;
@@ -330,7 +330,7 @@ public class ObjectPool<T> implements IObjectPool<T>{
 				if(maxNum>=coreSize){
 					times = (this.objectContainer.size()-1 - maxNum)/2;
 				}else{
-					times = (this.objectContainer.size() - coreSize)/2;
+					times = (this.objectContainer.size() - coreSize + 1)/2;
 				}
 				long now = System.currentTimeMillis();
 				int count = 0;
