@@ -325,7 +325,13 @@ public class ObjectPool<T> implements IObjectPool<T>{
 		if(this.isMore() && size <= 0 ){
 			Integer maxNum = freeCheck.getMaxNum();
 			if(maxNum!=null && maxNum<this.objectContainer.size()-1){
-				int times = (this.objectContainer.size()-1 - maxNum)/2;
+				int coreSize = this.poolProperties.getCoreSize();
+				int times;
+				if(maxNum>=coreSize){
+					times = (this.objectContainer.size()-1 - maxNum)/2;
+				}else{
+					times = (this.objectContainer.size() - coreSize)/2;
+				}
 				long now = System.currentTimeMillis();
 				int count = 0;
 				while(true){
