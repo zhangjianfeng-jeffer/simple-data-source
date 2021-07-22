@@ -1,6 +1,7 @@
 package com.yolo.simple.ds.pool;
 
 import java.util.*;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -189,6 +190,7 @@ public class ObjectPool<T> implements IObjectPool<T>{
 		if(createFlag){
 			this.createObjProcess.send(this.name, ObjectPool.CREATE_OBJ_TYPE);
 		}
+		freeCheck.logNum(this.objectContainer.usedSize());
 		if(this.isTimeToCheckFree()){
 			this.cleanFreeProcess.send(this.name, ObjectPool.CLEAN_FREE_TYPE);
 		}
@@ -213,6 +215,15 @@ public class ObjectPool<T> implements IObjectPool<T>{
 			isFull = true;
 		}
 		return isFull;
+	}
+
+	private boolean isMore(){
+		boolean isMore = false;
+		int coreSize = this.poolProperties.getCoreSize();
+		if(this.objectContainer.size()>coreSize){
+			isMore = true;
+		}
+		return isMore;
 	}
 	
 	private boolean isLess(){
@@ -305,20 +316,22 @@ public class ObjectPool<T> implements IObjectPool<T>{
 	}
 
 
-	private FreeCheck freeCheck = new FreeCheck(10);
+	private FreeCheck freeCheck = new FreeCheck(10,10);
 	private synchronized void cleanFree(){
 		if(!this.onOff){
 			return;
 		}
-		freeCheck.logNum(this.objectContainer.usedSize());
 		int size = this.waitQueue.getSize();
-		if(this.isLess()==false && size <= 0 ){
+		if(this.isMore() && size <= 0 ){
 			Integer maxNum = freeCheck.getMaxNum();
 			if(maxNum!=null && maxNum<this.objectContainer.size()-1){
 				int times = (this.objectContainer.size()-1 - maxNum)/2;
 				long now = System.currentTimeMillis();
 				int count = 0;
 				while(true){
+					if(!this.isMore()){
+						break;
+					}
 					if(count>=times){
 						break;
 					}
@@ -367,38 +380,136 @@ public class ObjectPool<T> implements IObjectPool<T>{
 			}
 		}
 	}
+
+
+	public static void main(String[] args)throws Exception {
+		FreeCheck freeCheck = new FreeCheck(3,10*1000);
+		while (true){
+			int num = (int)(Math.random()*10);
+			freeCheck.logNum(num);
+			System.out.println(freeCheck.toString());
+			Thread.sleep(1000);
+		}
+	}
 	
 }
 
 
 class FreeCheck{
 	private int size;
-	private List<Integer> useNumList;
+	private int timeStep;
+	private LinkedList<CheckPoint> useNumList;
+	private ReentrantLock logLock=new ReentrantLock();
 
-	public FreeCheck(int size){
+	private volatile long currentTimePoint;
+	private volatile int currentMaxUseNum;
+
+	public FreeCheck(int size,int timeStep){
 		this.size = size;
-		this.useNumList = new ArrayList<Integer>();
+		this.timeStep = timeStep;
+		this.useNumList = new LinkedList<CheckPoint>();
 	}
 
-	public synchronized void logNum(int num){
-		useNumList.add(num);
-		if(useNumList.size()>this.size){
-			useNumList.remove(useNumList.size()-1);
+	public void logNum(int num){
+		long time = System.currentTimeMillis();
+		long timePoint =  time/timeStep;
+		if(timePoint == currentTimePoint){
+			if(num>currentMaxUseNum){
+				currentMaxUseNum = num;
+			}
+		}else{
+			if(logLock.tryLock()){
+				try{
+					CheckPoint checkPoint = new CheckPoint();
+					checkPoint.setTimePoint(currentTimePoint);
+					checkPoint.setMaxUseNum(currentMaxUseNum);
+					currentTimePoint = timePoint;
+					currentMaxUseNum = num;
+					useNumList.add(checkPoint);
+					this.removeExpireCheckPoint();
+				}finally {
+					logLock.unlock();
+				}
+			}
 		}
 	}
 
-	public synchronized Integer getMaxNum(){
-		Integer num = null;
-		if(useNumList.size() >= this.size){
-			for (Integer numItem:useNumList) {
-				if(num == null || numItem>num){
-					num = numItem;
+	private void removeExpireCheckPoint(){
+		boolean overFlag = false;
+		while(true){
+			overFlag = true;
+			if(useNumList.size()>0){
+				CheckPoint checkPoint = useNumList.getFirst();
+				if(checkPoint!=null){
+					long timePoint = checkPoint.getTimePoint();
+					if(currentTimePoint - timePoint>size){
+						useNumList.removeFirst();
+						overFlag = false;
+					}
 				}
 			}
+			if(overFlag){
+				break;
+			}
+		}
+	}
+
+	public Integer getMaxNum(){
+		Integer num = null;
+		try {
+			logLock.lock();
+			if(useNumList.size() >= 0){
+				for (CheckPoint checkPoint:useNumList) {
+					if(checkPoint!=null){
+						int maxUseNum = checkPoint.getMaxUseNum();
+						if(num == null || maxUseNum>num){
+							num = maxUseNum;
+						}
+					}
+				}
+			}
+		}finally {
+			logLock.unlock();
 		}
 		return num;
 	}
 
+	@Override
+	public String toString(){
+		String result = null;
+		try {
+			logLock.lock();
+			result = "currentTimePoint:"+currentTimePoint+",currentMaxUseNum:"+currentMaxUseNum+useNumList.toString();
+		}finally {
+			logLock.unlock();
+		}
+		return result;
+	}
+}
+
+class CheckPoint{
+	private long timePoint;
+	private int maxUseNum;
 
 
+	public long getTimePoint() {
+		return timePoint;
+	}
+
+	public void setTimePoint(long timePoint) {
+		this.timePoint = timePoint;
+	}
+
+	public int getMaxUseNum() {
+		return maxUseNum;
+	}
+
+	public void setMaxUseNum(int maxUseNum) {
+		this.maxUseNum = maxUseNum;
+	}
+
+	@Override
+	public String toString(){
+		return "timePoint:"+timePoint+",maxUseNum:"+maxUseNum;
+	}
 }
