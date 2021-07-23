@@ -68,8 +68,7 @@ public abstract class WaitQueue<T> {
 		return true;
 	}
 	
-	
-	
+
 	private Boolean tryProcess(){
 		Boolean result = null;
 		if(isDoingLock.tryLock()){
