@@ -16,9 +16,7 @@ public abstract class WaitQueue<T> {
 	private BlockingQueue<WaitObject<T>> blockingQueue;
 	private int queueSize=50;
 	private long timeOut=1000;
-	
-	
-	private volatile boolean isDoing=false;
+
 	private ReentrantLock isDoingLock=new ReentrantLock();
 	public WaitQueue(){
 		this.blockingQueue=new LinkedBlockingQueue<WaitObject<T>>(this.queueSize);
@@ -56,7 +54,14 @@ public abstract class WaitQueue<T> {
 	
 	
 	public boolean flush(){
-		Boolean result = this.tryProcess();
+		Boolean result = null;
+		int maxTimes = 3;
+		for (int i = 0; i < maxTimes; i++) {
+			result = this.tryProcess();
+			if(result==null || result==false){
+				break;
+			}
+		}
 		if(result == null){
 			return false;
 		}
@@ -67,23 +72,12 @@ public abstract class WaitQueue<T> {
 	
 	private Boolean tryProcess(){
 		Boolean result = null;
-		if(isDoing == true){
-			return false;
-		}
-		isDoingLock.lock();
-		try{
-			if(isDoing==true){
-				return false;
+		if(isDoingLock.tryLock()){
+			try{
+				result = this.tryProcessSource();
+			}finally {
+				isDoingLock.unlock();
 			}
-			isDoing=true;
-		}finally{
-			isDoingLock.unlock();
-		}
-
-		try{
-			result = this.tryProcessSource();
-		}finally{
-			isDoing=false;
 		}
 		return result;
 	}
