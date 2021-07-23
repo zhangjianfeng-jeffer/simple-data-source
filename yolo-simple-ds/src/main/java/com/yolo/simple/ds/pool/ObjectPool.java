@@ -474,6 +474,10 @@ class FreeCheck{
 					}
 				}
 			}
+			int currentMax = currentMaxUseNum;
+			if(num == null || currentMax>num){
+				num = currentMax;
+			}
 		}finally {
 			logLock.unlock();
 		}
